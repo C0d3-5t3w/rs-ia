@@ -32,7 +32,6 @@ pub struct EnvironmentConfig {
     pub wall_thickness: usize,
     pub movement_speed: usize,
     pub max_frames_per_game: u32,
-    // Optional fields with defaults for backward compatibility
     #[serde(default = "default_gravity")]
     pub gravity: f64,
     #[serde(default = "default_jump_velocity")]
@@ -47,7 +46,6 @@ pub struct EnvironmentConfig {
     pub pipe_spawn_distance: f64,
 }
 
-// Default functions for optional fields
 fn default_gravity() -> f64 { 0.0 }
 fn default_jump_velocity() -> f64 { 0.0 }
 fn default_bird_size() -> f64 { 0.0 }
