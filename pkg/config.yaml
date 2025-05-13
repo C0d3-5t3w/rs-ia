@@ -1,0 +1,27 @@
+# Neural Network Configuration
+network:
+  input_size: 10
+  hidden_size1: 32
+  hidden_size2: 16
+  output_size: 4
+  learning_rate: 0.005
+  
+# Training Parameters
+training:
+  discount_factor: 0.95
+  exploration_rate: 1.0
+  exploration_decay: 0.997
+  min_exploration_rate: 0.05
+  batch_size: 64
+  buffer_size: 20000
+  
+# Game Environment
+environment:
+  canvas_width: 800
+  canvas_height: 600
+  grid_size: 20  # Size of each cell in pixels
+  maze_width: 20  # Number of cells wide
+  maze_height: 15  # Number of cells tall
+  wall_thickness: 2  # Wall thickness in pixels
+  movement_speed: 1  # Cells per move
+  max_frames_per_game: 1000000
