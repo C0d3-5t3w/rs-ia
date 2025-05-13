@@ -5,8 +5,18 @@ const CELL_TYPES = {
     PLAYER: 2,
     GOAL: 3,
 };
+function debugLog(message, data) {
+    console.log(`[DEBUG] ${message}`, data || '');
+    const errorLog = document.getElementById('error-log');
+    if (errorLog) {
+        errorLog.style.display = 'block';
+        errorLog.textContent += `[DEBUG] ${message} ${data ? JSON.stringify(data) : ''}\n`;
+    }
+}
 class MazeGameRenderer {
     constructor() {
+        this.initialized = false;
+        debugLog("MazeGameRenderer constructor started");
         const canvasElement = document.getElementById("game");
         if (!canvasElement || !(canvasElement instanceof HTMLCanvasElement)) {
             throw new Error("Canvas element not found");
@@ -19,22 +29,35 @@ class MazeGameRenderer {
         this.ctx = context;
         this.width = this.canvas.width;
         this.height = this.canvas.height;
+        const defaultWidth = 20;
+        const defaultHeight = 15;
+        const defaultCells = Array(defaultHeight).fill(null).map(() => Array(defaultWidth).fill(CELL_TYPES.EMPTY));
+        for (let x = 0; x < defaultWidth; x++) {
+            defaultCells[0][x] = CELL_TYPES.WALL;
+            defaultCells[defaultHeight - 1][x] = CELL_TYPES.WALL;
+        }
+        for (let y = 0; y < defaultHeight; y++) {
+            defaultCells[y][0] = CELL_TYPES.WALL;
+            defaultCells[y][defaultWidth - 1] = CELL_TYPES.WALL;
+        }
         this.gameState = {
             maze: {
-                cells: [],
-                width: 20,
-                height: 15,
+                cells: defaultCells,
+                width: defaultWidth,
+                height: defaultHeight,
             },
             player_x: 1,
             player_y: 1,
-            goal_x: 18,
-            goal_y: 13,
+            goal_x: defaultWidth - 2,
+            goal_y: defaultHeight - 2,
             score: 0,
             game_over: false,
             won: false,
         };
+        this.gameState.maze.cells[1][1] = CELL_TYPES.PLAYER;
+        this.gameState.maze.cells[defaultHeight - 2][defaultWidth - 2] = CELL_TYPES.GOAL;
         this.colors = {
-            background: "#f0f0f0",
+            background: "#ffffff",
             wall: "#333333",
             player: "#4285F4",
             goal: "#EA4335",
@@ -45,10 +68,15 @@ class MazeGameRenderer {
         this.showGrid = true;
         this.gameSpeed = 0.7;
         this.socket = null;
+        debugLog("Attempting to connect WebSocket");
         this.connectWebSocket();
+        debugLog("Setting up controls");
         this.setupControls();
-        this.render();
+        debugLog("Creating UI");
         this.createUI();
+        debugLog("Starting render loop");
+        this.render();
+        debugLog("MazeGameRenderer constructor completed");
     }
     createUI() {
         const controlPanel = document.createElement("div");
@@ -151,69 +179,101 @@ class MazeGameRenderer {
     connectWebSocket() {
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         const wsUrl = `${protocol}//${window.location.host}/ws`;
-        this.socket = new WebSocket(wsUrl);
-        this.socket.onopen = () => {
-            console.log("WebSocket connection established");
-            const statusElement = document.getElementById("status");
-            if (statusElement) {
-                statusElement.textContent = "Connected (AI Controlled)";
-            }
-            if (this.socket) {
-                const message = { action: "getSettings" };
-                this.socket.send(JSON.stringify(message));
-            }
-        };
-        this.socket.onmessage = (event) => {
-            try {
-                const data = JSON.parse(event.data);
-                if ("settings" in data) {
-                    const settings = data;
-                    this.updateSettingsUI(settings.settings);
+        debugLog(`WebSocket URL: ${wsUrl}`);
+        try {
+            this.socket = new WebSocket(wsUrl);
+            this.socket.onopen = () => {
+                debugLog("WebSocket connection established");
+                const statusElement = document.getElementById("status");
+                if (statusElement) {
+                    statusElement.textContent = "Connected (AI Controlled)";
                 }
-                else {
-                    this.gameState = data;
-                    const scoreElement = document.getElementById("score");
-                    if (scoreElement) {
-                        scoreElement.textContent = this.gameState.score.toString();
-                    }
-                    const statusElement = document.getElementById("status");
-                    if (this.gameState.game_over) {
-                        const status = this.gameState.won
-                            ? this.playerControlled
-                                ? "You Win!"
-                                : "AI Wins!"
-                            : "Game Over";
-                        if (statusElement) {
-                            statusElement.textContent = status;
-                        }
-                    }
-                    else if (this.playerControlled) {
-                        if (statusElement) {
-                            statusElement.textContent = "Player Controlled";
-                        }
+                if (this.socket) {
+                    const message = { action: "getSettings" };
+                    this.socket.send(JSON.stringify(message));
+                }
+            };
+            this.socket.onmessage = (event) => {
+                try {
+                    debugLog("WebSocket message received", event.data.substring(0, 100) + "...");
+                    const data = JSON.parse(event.data);
+                    if ("settings" in data) {
+                        const settings = data;
+                        this.updateSettingsUI(settings.settings);
                     }
                     else {
-                        if (statusElement) {
-                            statusElement.textContent = "AI Controlled";
+                        if (!this.validateGameState(data)) {
+                            debugLog("Invalid game state received", data);
+                            return;
+                        }
+                        if (!this.initialized) {
+                            this.initialized = true;
+                            debugLog("Game initialized with valid data");
+                        }
+                        this.gameState = data;
+                        const scoreElement = document.getElementById("score");
+                        if (scoreElement) {
+                            scoreElement.textContent = this.gameState.score.toString();
+                        }
+                        const statusElement = document.getElementById("status");
+                        if (this.gameState.game_over) {
+                            const status = this.gameState.won
+                                ? this.playerControlled
+                                    ? "You Win!"
+                                    : "AI Wins!"
+                                : "Game Over";
+                            if (statusElement) {
+                                statusElement.textContent = status;
+                            }
+                        }
+                        else if (this.playerControlled) {
+                            if (statusElement) {
+                                statusElement.textContent = "Player Controlled";
+                            }
+                        }
+                        else {
+                            if (statusElement) {
+                                statusElement.textContent = "AI Controlled";
+                            }
                         }
                     }
                 }
+                catch (e) {
+                    debugLog(`Error parsing WebSocket message: ${e.message}`);
+                }
+            };
+            this.socket.onclose = () => {
+                debugLog("WebSocket connection closed");
+                const statusElement = document.getElementById("status");
+                if (statusElement) {
+                    statusElement.textContent = "Disconnected";
+                }
+                setTimeout(() => this.connectWebSocket(), 2000);
+            };
+            this.socket.onerror = (error) => {
+                debugLog(`WebSocket error: ${JSON.stringify(error)}`);
+            };
+        }
+        catch (e) {
+            debugLog(`Error connecting to WebSocket: ${e.message}`);
+        }
+    }
+    validateGameState(data) {
+        if (!data.maze || !data.maze.cells || !Array.isArray(data.maze.cells)) {
+            debugLog("Missing maze cells array in game state", data);
+            return false;
+        }
+        if (data.maze.cells.length === 0) {
+            debugLog("Empty maze cells array", data);
+            return false;
+        }
+        for (let i = 0; i < data.maze.cells.length; i++) {
+            if (!Array.isArray(data.maze.cells[i])) {
+                debugLog(`Maze cells row ${i} is not an array`, data.maze.cells[i]);
+                return false;
             }
-            catch (e) {
-                console.error("Error parsing WebSocket message:", e);
-            }
-        };
-        this.socket.onclose = () => {
-            console.log("WebSocket connection closed");
-            const statusElement = document.getElementById("status");
-            if (statusElement) {
-                statusElement.textContent = "Disconnected";
-            }
-            setTimeout(() => this.connectWebSocket(), 2000);
-        };
-        this.socket.onerror = (error) => {
-            console.error("WebSocket error:", error);
-        };
+        }
+        return true;
     }
     updateSettingsUI(settings) {
         if (settings.gameSpeed !== undefined) {
@@ -228,23 +288,40 @@ class MazeGameRenderer {
         }
     }
     render() {
-        this.ctx.fillStyle = this.colors.background;
-        this.ctx.fillRect(0, 0, this.width, this.height);
-        const cellWidth = this.width / this.gameState.maze.width;
-        const cellHeight = this.height / this.gameState.maze.height;
-        this.drawMaze(cellWidth, cellHeight);
-        this.drawStats();
-        if (this.gameState.game_over) {
-            this.drawGameOver();
+        try {
+            this.ctx.fillStyle = this.colors.background;
+            this.ctx.fillRect(0, 0, this.width, this.height);
+            if (this.gameState && this.gameState.maze && this.gameState.maze.cells) {
+                const cellWidth = this.width / this.gameState.maze.width;
+                const cellHeight = this.height / this.gameState.maze.height;
+                this.drawMaze(cellWidth, cellHeight);
+                this.drawStats();
+                if (this.gameState.game_over) {
+                    this.drawGameOver();
+                }
+            }
+            else {
+                this.ctx.fillStyle = "black";
+                this.ctx.font = "20px Arial";
+                this.ctx.textAlign = "center";
+                this.ctx.fillText("Loading maze data...", this.width / 2, this.height / 2);
+            }
+            setTimeout(() => {
+                requestAnimationFrame(() => this.render());
+            }, (1000 / 20) * (1 / this.gameSpeed));
         }
-        setTimeout(() => {
-            requestAnimationFrame(() => this.render());
-        }, (1000 / 20) * (1 / this.gameSpeed));
+        catch (e) {
+            debugLog(`Render error: ${e.message}`);
+        }
     }
     drawMaze(cellWidth, cellHeight) {
         const maze = this.gameState.maze;
         for (let y = 0; y < maze.height; y++) {
             for (let x = 0; x < maze.width; x++) {
+                if (!maze.cells[y] || maze.cells[y][x] === undefined) {
+                    debugLog(`Missing cell at [${y}][${x}]`);
+                    continue;
+                }
                 const cell = maze.cells[y][x];
                 const xPos = x * cellWidth;
                 const yPos = y * cellHeight;
@@ -308,18 +385,12 @@ class MazeGameRenderer {
     }
 }
 window.addEventListener("DOMContentLoaded", () => {
-    console.log("MazeGameRenderer initializing...");
+    debugLog("DOM content loaded, initializing MazeGameRenderer");
     try {
         const game = new MazeGameRenderer();
-        console.log("MazeGameRenderer initialized successfully");
+        debugLog("MazeGameRenderer initialized successfully");
     }
     catch (e) {
-        console.error("Failed to initialize MazeGameRenderer:", e);
-        const errorDisplay = document.getElementById("error-log");
-        if (errorDisplay) {
-            errorDisplay.textContent +=
-                "MazeGameRenderer Error: " + e.message;
-            errorDisplay.style.display = "block";
-        }
+        debugLog(`Failed to initialize MazeGameRenderer: ${e.message}`);
     }
 });
