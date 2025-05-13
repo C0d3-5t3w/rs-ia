@@ -3,13 +3,19 @@ class MazeGameRenderer {
     constructor() {
         const canvasElement = document.getElementById("game");
         if (!canvasElement || !(canvasElement instanceof HTMLCanvasElement)) {
+            console.error("Canvas element not found or not a canvas");
             throw new Error("Canvas element not found");
         }
+        console.log("Canvas found:", canvasElement.width, "x", canvasElement.height);
+
         this.canvas = canvasElement;
         const context = this.canvas.getContext("2d");
         if (!context) {
+            console.error("Could not get 2D context");
             throw new Error("Could not get 2D context");
         }
+        console.log("2D context acquired");
+
         this.ctx = context;
         this.width = this.canvas.width;
         this.height = this.canvas.height;
@@ -148,7 +154,10 @@ class MazeGameRenderer {
     connectWebSocket() {
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         const wsUrl = `${protocol}//${window.location.host}/ws`;
+        console.log("Attempting WebSocket connection to:", wsUrl);
+
         this.socket = new WebSocket(wsUrl);
+
         this.socket.onopen = () => {
             console.log("WebSocket connection established");
             const statusElement = document.getElementById("status");
@@ -159,8 +168,10 @@ class MazeGameRenderer {
                 this.socket.send(JSON.stringify({ action: "getSettings" }));
             }
         };
+
         this.socket.onmessage = (event) => {
             try {
+                console.log("WebSocket message received:", event.data.substring(0, 100) + "...");
                 const data = JSON.parse(event.data);
                 if (data.settings) {
                     this.updateSettingsUI(data.settings);
@@ -198,6 +209,7 @@ class MazeGameRenderer {
                 console.error("Error parsing WebSocket message:", e);
             }
         };
+
         this.socket.onclose = () => {
             console.log("WebSocket connection closed");
             const statusElement = document.getElementById("status");
@@ -206,6 +218,7 @@ class MazeGameRenderer {
             }
             setTimeout(() => this.connectWebSocket(), 2000);
         };
+
         this.socket.onerror = (error) => {
             console.error("WebSocket error:", error);
         };
@@ -303,5 +316,10 @@ class MazeGameRenderer {
     }
 }
 window.addEventListener("DOMContentLoaded", () => {
-    new MazeGameRenderer();
+    console.log("DOM content loaded, initializing game renderer");
+    try {
+        new MazeGameRenderer();
+    } catch (e) {
+        console.error("Error initializing game:", e);
+    }
 });
