@@ -7,7 +7,7 @@ use ai::brain::orchestrator::Orchestrator;
 
 #[tokio::main]
 async fn main() {
-    println!("Starting Flappy Bird AI Training Server");
+    println!("Starting Maze Navigator AI Training Server");
     
     // Create AI instance with configuration from YAML
     let ai = Arc::new(Mutex::new(AI::new_from_config("./pkg/config.yaml")));
@@ -28,12 +28,20 @@ async fn main() {
         loop {
             interval.tick().await;
             {
-                let ai_guard = save_ai.lock().unwrap();
-                ai_guard.save_brain("./pkg/brain.nn").unwrap_or_else(|e| {
-                    eprintln!("Error saving brain: {}", e);
-                });
+                match save_ai.lock() {
+                    Ok(ai_guard) => {
+                        ai_guard.save_brain("./pkg/brain.nn").unwrap_or_else(|e| {
+                            eprintln!("Error saving brain: {}", e);
+                        });
+                    },
+                    Err(poisoned) => {
+                        poisoned.into_inner().save_brain("./pkg/brain.nn").unwrap_or_else(|e| {
+                            eprintln!("Error saving brain: {}", e);
+                        });
+                    }
+                }
+                println!("Neural network saved to ./pkg/brain.nn");
             }
-            println!("Neural network saved to ./pkg/brain.nn");
         }
     });
     

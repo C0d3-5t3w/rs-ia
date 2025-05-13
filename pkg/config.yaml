@@ -25,3 +25,10 @@ environment:
   wall_thickness: 2  # Wall thickness in pixels
   movement_speed: 1  # Cells per move
   max_frames_per_game: 1000000
+  # Adding missing fields with default values
+  gravity: 0.0
+  jump_velocity: 0.0
+  bird_size: 0.0
+  pipe_width: 0.0
+  pipe_gap: 0.0
+  pipe_spawn_distance: 0.0

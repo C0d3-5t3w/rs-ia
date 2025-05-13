@@ -82,14 +82,35 @@ async fn handle_connection(
             interval.tick().await;
             
             let game_state = {
-                let ai_locked = ai_clone.lock().unwrap();
-                ai_locked.get_game_state()
+                // Handle mutex poisoning gracefully
+                match ai_clone.lock() {
+                    Ok(ai_locked) => ai_locked.get_game_state(),
+                    Err(poisoned) => {
+                        eprintln!("Warning: AI mutex was poisoned. Recovering...");
+                        poisoned.into_inner().get_game_state()
+                    }
+                }
             };
             
-            let json = serde_json::to_string(&game_state).unwrap();
+            let json = match serde_json::to_string(&game_state) {
+                Ok(j) => j,
+                Err(e) => {
+                    eprintln!("Error serializing game state: {}", e);
+                    continue;
+                }
+            };
+            
             let message = warp::ws::Message::text(json);
             
-            let clients_locked = clients_clone.lock().unwrap();
+            // Handle mutex poisoning for clients
+            let clients_locked = match clients_clone.lock() {
+                Ok(guard) => guard,
+                Err(poisoned) => {
+                    eprintln!("Warning: Clients mutex was poisoned. Recovering...");
+                    poisoned.into_inner()
+                }
+            };
+            
             for (_id, client_tx) in clients_locked.iter() {
                 if let Err(_) = client_tx.send(message.clone()) {
                     // Client disconnected, will be cleaned up later
@@ -110,61 +131,116 @@ async fn handle_connection(
                 if let Ok(text) = msg.to_str() {
                     if let Ok(command) = serde_json::from_str::<serde_json::Value>(text) {
                         if let Some(action) = command.get("action") {
-                            let action_str = action.as_str().unwrap_or("");
-                            
-                            match action_str {
-                                "up" => {
-                                    // Process up movement
-                                    let mut ai_guard = ai.lock().unwrap();
-                                    ai_guard.manual_move(&crate::ai::brain::actions::Action::Up);
-                                },
-                                "down" => {
-                                    // Process down movement
-                                    let mut ai_guard = ai.lock().unwrap();
-                                    ai_guard.manual_move(&crate::ai::brain::actions::Action::Down);
-                                },
-                                "left" => {
-                                    // Process left movement
-                                    let mut ai_guard = ai.lock().unwrap();
-                                    ai_guard.manual_move(&crate::ai::brain::actions::Action::Left);
-                                },
-                                "right" => {
-                                    // Process right movement
-                                    let mut ai_guard = ai.lock().unwrap();
-                                    ai_guard.manual_move(&crate::ai::brain::actions::Action::Right);
-                                },
-                                "getSettings" => {
-                                    // Return current settings to the client
-                                    let settings = {
-                                        let ai_guard = ai.lock().unwrap();
-                                        serde_json::json!({
-                                            "settings": {
-                                                "gameSpeed": ai_guard.get_game_speed()
+                            if let Some(action_str) = action.as_str() {
+                                match action_str {
+                                    "up" => {
+                                        // Process up movement
+                                        match ai.lock() {
+                                            Ok(mut ai_guard) => {
+                                                ai_guard.manual_move(&crate::ai::brain::actions::Action::Up);
+                                            },
+                                            Err(poisoned) => {
+                                                poisoned.into_inner().manual_move(&crate::ai::brain::actions::Action::Up);
                                             }
-                                        })
-                                    };
-                                    
-                                    if let Ok(client) = clients.lock() {
-                                        if let Some(client_tx) = client.get(&client_id) {
-                                            let _ = client_tx.send(warp::ws::Message::text(
-                                                serde_json::to_string(&settings).unwrap()
-                                            ));
                                         }
-                                    }
-                                },
-                                _ => {}
+                                    },
+                                    "down" => {
+                                        // Process down movement
+                                        match ai.lock() {
+                                            Ok(mut ai_guard) => {
+                                                ai_guard.manual_move(&crate::ai::brain::actions::Action::Down);
+                                            },
+                                            Err(poisoned) => {
+                                                poisoned.into_inner().manual_move(&crate::ai::brain::actions::Action::Down);
+                                            }
+                                        }
+                                    },
+                                    "left" => {
+                                        // Process left movement
+                                        match ai.lock() {
+                                            Ok(mut ai_guard) => {
+                                                ai_guard.manual_move(&crate::ai::brain::actions::Action::Left);
+                                            },
+                                            Err(poisoned) => {
+                                                poisoned.into_inner().manual_move(&crate::ai::brain::actions::Action::Left);
+                                            }
+                                        }
+                                    },
+                                    "right" => {
+                                        // Process right movement
+                                        match ai.lock() {
+                                            Ok(mut ai_guard) => {
+                                                ai_guard.manual_move(&crate::ai::brain::actions::Action::Right);
+                                            },
+                                            Err(poisoned) => {
+                                                poisoned.into_inner().manual_move(&crate::ai::brain::actions::Action::Right);
+                                            }
+                                        }
+                                    },
+                                    "getSettings" => {
+                                        // Return current settings to the client
+                                        let settings = {
+                                            match ai.lock() {
+                                                Ok(ai_guard) => serde_json::json!({
+                                                    "settings": {
+                                                        "gameSpeed": ai_guard.get_game_speed()
+                                                    }
+                                                }),
+                                                Err(poisoned) => {
+                                                    let ai_guard = poisoned.into_inner();
+                                                    serde_json::json!({
+                                                        "settings": {
+                                                            "gameSpeed": ai_guard.get_game_speed()
+                                                        }
+                                                    })
+                                                }
+                                            }
+                                        };
+                                        
+                                        match clients.lock() {
+                                            Ok(client) => {
+                                                if let Some(client_tx) = client.get(&client_id) {
+                                                    let _ = client_tx.send(warp::ws::Message::text(
+                                                        serde_json::to_string(&settings).unwrap()
+                                                    ));
+                                                }
+                                            },
+                                            Err(poisoned) => {
+                                                let client = poisoned.into_inner();
+                                                if let Some(client_tx) = client.get(&client_id) {
+                                                    let _ = client_tx.send(warp::ws::Message::text(
+                                                        serde_json::to_string(&settings).unwrap()
+                                                    ));
+                                                }
+                                            }
+                                        }
+                                    },
+                                    _ => {}
+                                }
                             }
                         } else if let Some(control_mode) = command.get("controlMode") {
                             // Update control mode (AI or player)
                             if let Some(is_player) = control_mode.as_bool() {
-                                let mut ai_guard = ai.lock().unwrap();
-                                ai_guard.set_player_controlled(is_player);
+                                match ai.lock() {
+                                    Ok(mut ai_guard) => {
+                                        ai_guard.set_player_controlled(is_player);
+                                    },
+                                    Err(poisoned) => {
+                                        poisoned.into_inner().set_player_controlled(is_player);
+                                    }
+                                }
                             }
                         } else if let Some(game_speed) = command.get("gameSpeed") {
                             // Update game speed
                             if let Some(speed_value) = game_speed.as_f64() {
-                                let mut ai_guard = ai.lock().unwrap();
-                                ai_guard.set_game_speed(speed_value);
+                                match ai.lock() {
+                                    Ok(mut ai_guard) => {
+                                        ai_guard.set_game_speed(speed_value);
+                                    },
+                                    Err(poisoned) => {
+                                        poisoned.into_inner().set_game_speed(speed_value);
+                                    }
+                                }
                             }
                         }
                     }
@@ -178,6 +254,14 @@ async fn handle_connection(
     }
     
     // Remove client on disconnect
-    clients.lock().unwrap().remove(&client_id);
+    match clients.lock() {
+        Ok(mut clients_guard) => {
+            clients_guard.remove(&client_id);
+        },
+        Err(poisoned) => {
+            let mut clients_guard = poisoned.into_inner();
+            clients_guard.remove(&client_id);
+        }
+    }
     println!("WebSocket client disconnected: {}", client_id);
 }

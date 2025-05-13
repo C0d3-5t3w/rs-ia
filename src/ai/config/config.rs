@@ -26,20 +26,34 @@ pub struct TrainingConfig {
 pub struct EnvironmentConfig {
     pub canvas_width: f64,
     pub canvas_height: f64,
-    pub gravity: f64,
-    pub jump_velocity: f64,
-    pub bird_size: f64,
-    pub pipe_width: f64,
-    pub pipe_gap: f64,
-    pub pipe_spawn_distance: f64,
-    pub max_frames_per_game: u32,
-    // New maze-specific fields
     pub grid_size: usize,
     pub maze_width: usize, 
     pub maze_height: usize,
     pub wall_thickness: usize,
     pub movement_speed: usize,
+    pub max_frames_per_game: u32,
+    // Optional fields with defaults for backward compatibility
+    #[serde(default = "default_gravity")]
+    pub gravity: f64,
+    #[serde(default = "default_jump_velocity")]
+    pub jump_velocity: f64,
+    #[serde(default = "default_bird_size")]
+    pub bird_size: f64,
+    #[serde(default = "default_pipe_width")]
+    pub pipe_width: f64,
+    #[serde(default = "default_pipe_gap")]
+    pub pipe_gap: f64,
+    #[serde(default = "default_pipe_spawn_distance")]
+    pub pipe_spawn_distance: f64,
 }
+
+// Default functions for optional fields
+fn default_gravity() -> f64 { 0.0 }
+fn default_jump_velocity() -> f64 { 0.0 }
+fn default_bird_size() -> f64 { 0.0 }
+fn default_pipe_width() -> f64 { 0.0 }
+fn default_pipe_gap() -> f64 { 0.0 }
+fn default_pipe_spawn_distance() -> f64 { 0.0 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AIConfig {

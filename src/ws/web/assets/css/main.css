@@ -111,6 +111,7 @@ canvas {
 /* Retro slider styling */
 input[type="range"] {
     -webkit-appearance: none;
+    appearance: none; /* Add standard property for compatibility */
     background: #000;
     border: 1px solid #0f0;
     height: 10px;

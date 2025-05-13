@@ -324,10 +324,16 @@ impl AI {
         state[5] = dy / (self.maze_height as f64);
         
         // Walls in four directions (up, down, left, right)
-        state[6] = if self.is_wall(self.player_x, self.player_y - 1) { 1.0 } else { 0.0 };
-        state[7] = if self.is_wall(self.player_x, self.player_y + 1) { 1.0 } else { 0.0 };
-        state[8] = if self.is_wall(self.player_x - 1, self.player_y) { 1.0 } else { 0.0 };
-        state[9] = if self.is_wall(self.player_x + 1, self.player_y) { 1.0 } else { 0.0 };
+        // Only add wall sensing if the input size is large enough
+        if self.config.network.input_size > 6 {
+            let wall_offset = 6;
+            let directions_to_check = (self.config.network.input_size - wall_offset).min(4);
+            
+            if directions_to_check > 0 { state[wall_offset] = if self.is_wall(self.player_x, self.player_y - 1) { 1.0 } else { 0.0 }; } // up
+            if directions_to_check > 1 { state[wall_offset + 1] = if self.is_wall(self.player_x, self.player_y + 1) { 1.0 } else { 0.0 }; } // down
+            if directions_to_check > 2 { state[wall_offset + 2] = if self.is_wall(self.player_x - 1, self.player_y) { 1.0 } else { 0.0 }; } // left 
+            if directions_to_check > 3 { state[wall_offset + 3] = if self.is_wall(self.player_x + 1, self.player_y) { 1.0 } else { 0.0 }; } // right
+        }
         
         state
     }
