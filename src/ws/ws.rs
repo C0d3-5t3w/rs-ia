@@ -221,6 +221,23 @@ async fn handle_connection(ws: warp::ws::WebSocket, clients: Clients, ai: Arc<Mu
                                     }
                                 }
                             }
+                        } else if let Some(difficulty) = command.get("difficulty") {
+                            if let Some(difficulty_value) = difficulty.as_str() {
+                                match ai.lock() {
+                                    Ok(mut ai_guard) => {
+                                        println!(
+                                            "Note: Difficulty setting '{}' received but not implemented",
+                                            difficulty_value
+                                        );
+                                    }
+                                    Err(poisoned) => {
+                                        println!(
+                                            "Note: Difficulty setting '{}' received but not implemented",
+                                            difficulty_value
+                                        );
+                                    }
+                                }
+                            }
                         }
                     }
                 }

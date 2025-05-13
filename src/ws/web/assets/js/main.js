@@ -1,30 +1,24 @@
 "use strict";
+const CELL_TYPES = {
+    EMPTY: 0,
+    WALL: 1,
+    PLAYER: 2,
+    GOAL: 3,
+};
 class MazeGameRenderer {
     constructor() {
         const canvasElement = document.getElementById("game");
         if (!canvasElement || !(canvasElement instanceof HTMLCanvasElement)) {
-            console.error("Canvas element not found or not a canvas");
             throw new Error("Canvas element not found");
         }
-        console.log("Canvas found:", canvasElement.width, "x", canvasElement.height);
-
         this.canvas = canvasElement;
         const context = this.canvas.getContext("2d");
         if (!context) {
-            console.error("Could not get 2D context");
             throw new Error("Could not get 2D context");
         }
-        console.log("2D context acquired");
-
         this.ctx = context;
         this.width = this.canvas.width;
         this.height = this.canvas.height;
-        this.CELL_TYPES = {
-            EMPTY: 0,
-            WALL: 1,
-            PLAYER: 2,
-            GOAL: 3,
-        };
         this.gameState = {
             maze: {
                 cells: [],
@@ -74,9 +68,10 @@ class MazeGameRenderer {
                     : "AI Controlled";
             }
             if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-                this.socket.send(JSON.stringify({
+                const message = {
                     controlMode: this.playerControlled,
-                }));
+                };
+                this.socket.send(JSON.stringify(message));
             }
         };
         controlPanel.appendChild(controlToggle);
@@ -88,19 +83,20 @@ class MazeGameRenderer {
         speedSlider.max = "2";
         speedSlider.step = "0.1";
         speedSlider.value = "0.7";
+        const speedValue = document.createElement("span");
+        speedValue.textContent = "0.7x";
         speedSlider.oninput = () => {
             this.gameSpeed = parseFloat(speedSlider.value);
             if (speedValue) {
                 speedValue.textContent = this.gameSpeed.toFixed(1) + "x";
             }
             if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-                this.socket.send(JSON.stringify({
+                const message = {
                     gameSpeed: this.gameSpeed,
-                }));
+                };
+                this.socket.send(JSON.stringify(message));
             }
         };
-        const speedValue = document.createElement("span");
-        speedValue.textContent = "0.7x";
         speedLabel.appendChild(speedSlider);
         speedLabel.appendChild(speedValue);
         controlPanel.appendChild(speedLabel);
@@ -148,16 +144,14 @@ class MazeGameRenderer {
     }
     movePlayer(direction) {
         if (this.socket && this.socket.readyState === WebSocket.OPEN) {
-            this.socket.send(JSON.stringify({ action: direction }));
+            const message = { action: direction };
+            this.socket.send(JSON.stringify(message));
         }
     }
     connectWebSocket() {
         const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
         const wsUrl = `${protocol}//${window.location.host}/ws`;
-        console.log("Attempting WebSocket connection to:", wsUrl);
-
         this.socket = new WebSocket(wsUrl);
-
         this.socket.onopen = () => {
             console.log("WebSocket connection established");
             const statusElement = document.getElementById("status");
@@ -165,16 +159,16 @@ class MazeGameRenderer {
                 statusElement.textContent = "Connected (AI Controlled)";
             }
             if (this.socket) {
-                this.socket.send(JSON.stringify({ action: "getSettings" }));
+                const message = { action: "getSettings" };
+                this.socket.send(JSON.stringify(message));
             }
         };
-
         this.socket.onmessage = (event) => {
             try {
-                console.log("WebSocket message received:", event.data.substring(0, 100) + "...");
                 const data = JSON.parse(event.data);
-                if (data.settings) {
-                    this.updateSettingsUI(data.settings);
+                if ("settings" in data) {
+                    const settings = data;
+                    this.updateSettingsUI(settings.settings);
                 }
                 else {
                     this.gameState = data;
@@ -209,7 +203,6 @@ class MazeGameRenderer {
                 console.error("Error parsing WebSocket message:", e);
             }
         };
-
         this.socket.onclose = () => {
             console.log("WebSocket connection closed");
             const statusElement = document.getElementById("status");
@@ -218,7 +211,6 @@ class MazeGameRenderer {
             }
             setTimeout(() => this.connectWebSocket(), 2000);
         };
-
         this.socket.onerror = (error) => {
             console.error("WebSocket error:", error);
         };
@@ -227,10 +219,10 @@ class MazeGameRenderer {
         if (settings.gameSpeed !== undefined) {
             const speedSlider = document.querySelector('input[type="range"][min="0.5"][max="2"]');
             if (speedSlider) {
-                speedSlider.value = settings.gameSpeed;
-                if (speedSlider.nextElementSibling) {
-                    speedSlider.nextElementSibling.textContent =
-                        settings.gameSpeed.toFixed(1) + "x";
+                speedSlider.value = settings.gameSpeed.toString();
+                const nextElement = speedSlider.nextElementSibling;
+                if (nextElement) {
+                    nextElement.textContent = settings.gameSpeed.toFixed(1) + "x";
                 }
             }
         }
@@ -257,13 +249,13 @@ class MazeGameRenderer {
                 const xPos = x * cellWidth;
                 const yPos = y * cellHeight;
                 switch (cell) {
-                    case this.CELL_TYPES.WALL:
+                    case CELL_TYPES.WALL:
                         this.ctx.fillStyle = this.colors.wall;
                         break;
-                    case this.CELL_TYPES.PLAYER:
+                    case CELL_TYPES.PLAYER:
                         this.ctx.fillStyle = this.colors.player;
                         break;
-                    case this.CELL_TYPES.GOAL:
+                    case CELL_TYPES.GOAL:
                         this.ctx.fillStyle = this.colors.goal;
                         break;
                     default:
@@ -316,10 +308,18 @@ class MazeGameRenderer {
     }
 }
 window.addEventListener("DOMContentLoaded", () => {
-    console.log("DOM content loaded, initializing game renderer");
+    console.log("MazeGameRenderer initializing...");
     try {
-        new MazeGameRenderer();
-    } catch (e) {
-        console.error("Error initializing game:", e);
+        const game = new MazeGameRenderer();
+        console.log("MazeGameRenderer initialized successfully");
+    }
+    catch (e) {
+        console.error("Failed to initialize MazeGameRenderer:", e);
+        const errorDisplay = document.getElementById("error-log");
+        if (errorDisplay) {
+            errorDisplay.textContent +=
+                "MazeGameRenderer Error: " + e.message;
+            errorDisplay.style.display = "block";
+        }
     }
 });
